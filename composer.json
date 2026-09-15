@@ -19,8 +19,7 @@
     ],
     "require": {
         "php": "^8.2",
-        "heritage/filesystem": "^1.00.00",
-        "heritage/support": "^1.00.00",
+        "ugarit/framework": "^1.00.00",
         "ugarit/prompts": "^1.00.00",
         "ugarit/agent-detector": "^1.00.00",
         "symfony/console": "^6.2|^7.0|^8.0",
@@ -36,12 +35,8 @@
     ],
     "autoload": {
         "psr-4": {
-            "Ugarit\\Installer\\Console\\": "src/",
-            "Heritage\\": "src/Heritage/"
-        },
-        "files": [
-            "src/Heritage/Filesystem/functions.php"
-        ]
+            "Ugarit\\Installer\\Console\\": "src/"
+        }
     },
     "autoload-dev": {
         "psr-4": {
