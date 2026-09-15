@@ -7,13 +7,13 @@ if (file_exists(__DIR__.'/../../../autoload.php')) {
     require __DIR__.'/../vendor/autoload.php';
 }
 
-require_once __DIR__.'/../src/Support/helpers.php';
+require_once __DIR__.'/../src/Heritage/Filesystem/functions.php';
 
 spl_autoload_register(function ($class) {
     if (str_starts_with($class, 'Heritage\\')) {
-        $illuminate = 'Illuminate\\' . substr($class, 9);
-        if (class_exists($illuminate) || interface_exists($illuminate) || trait_exists($illuminate)) {
-            class_alias($illuminate, $class);
+        $path = __DIR__.'/../src/'.str_replace('\\', '/', $class).'.php';
+        if (file_exists($path)) {
+            require_once $path;
         }
     }
 });

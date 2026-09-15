@@ -36,8 +36,12 @@
     ],
     "autoload": {
         "psr-4": {
-            "Ugarit\\Installer\\Console\\": "src/"
-        }
+            "Ugarit\\Installer\\Console\\": "src/",
+            "Heritage\\": "src/Heritage/"
+        },
+        "files": [
+            "src/Heritage/Filesystem/functions.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -48,6 +52,5 @@
         "sort-packages": true
     },
     "minimum-stability": "dev",
-    "prefer-stable": true,
-    "version": "1.00.00"
+    "prefer-stable": true
 }
