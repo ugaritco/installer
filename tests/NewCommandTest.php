@@ -1,0 +1,691 @@
+<?php
+
+namespace Ugarit\Installer\Console\Tests;
+
+use Heritage\Filesystem\Filesystem;
+use Heritage\Support\Composer;
+use Ugarit\Installer\Console\Agent;
+use Ugarit\Installer\Console\Concerns\InteractsWithHerdOrValet;
+use Ugarit\Installer\Console\Enums\NodePackageManager;
+use Ugarit\Installer\Console\NewCommand;
+use Ugarit\Prompts\ConfirmPrompt;
+use Ugarit\Prompts\Prompt;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Process\Process;
+
+class NewCommandTest extends TestCase
+{
+    use InteractsWithHerdOrValet;
+
+    public function test_it_can_scaffold_a_new_ugarit_app()
+    {
+        $scaffoldDirectoryName = 'tests-output/my-app';
+        $scaffoldDirectory = __DIR__.'/../'.$scaffoldDirectoryName;
+
+        if (file_exists($scaffoldDirectory)) {
+            if (PHP_OS_FAMILY == 'Windows') {
+                exec("rd /s /q \"$scaffoldDirectory\"");
+            } else {
+                exec("rm -rf \"$scaffoldDirectory\"");
+            }
+        }
+
+        $app = $this->createApplication();
+
+        $tester = new CommandTester($app->find('new'));
+
+        $statusCode = $tester->execute(['name' => $scaffoldDirectoryName], ['interactive' => false]);
+
+        $this->assertSame(0, $statusCode);
+        $this->assertDirectoryExists($scaffoldDirectory.'/vendor');
+        $this->assertFileExists($scaffoldDirectory.'/.env');
+    }
+
+    public function test_it_can_chop_trailing_slash_from_name()
+    {
+        if ($this->runOnValetOrHerd('paths') === false) {
+            $this->markTestSkipped('Require `herd` or `valet` to resolve `APP_URL` using hostname instead of "localhost".');
+        }
+
+        $scaffoldDirectoryName = 'tests-output/trailing/';
+        $scaffoldDirectory = __DIR__.'/../'.$scaffoldDirectoryName;
+
+        if (file_exists($scaffoldDirectory)) {
+            if (PHP_OS_FAMILY == 'Windows') {
+                exec("rd /s /q \"$scaffoldDirectory\"");
+            } else {
+                exec("rm -rf \"$scaffoldDirectory\"");
+            }
+        }
+
+        $app = $this->createApplication();
+
+        $tester = new CommandTester($app->find('new'));
+
+        $statusCode = $tester->execute(['name' => $scaffoldDirectoryName], ['interactive' => false]);
+
+        $this->assertSame(0, $statusCode);
+        $this->assertDirectoryExists($scaffoldDirectory.'/vendor');
+        $this->assertFileExists($scaffoldDirectory.'/.env');
+
+        if ($this->isParkedOnHerdOrValet($scaffoldDirectory)) {
+            $this->assertStringContainsStringIgnoringLineEndings(
+                'APP_URL=http://tests-output/trailing.test',
+                file_get_contents($scaffoldDirectory.'/.env')
+            );
+        }
+    }
+
+    public function test_on_at_least_ugarit_11()
+    {
+        $command = new NewCommand;
+
+        $onUgarit10 = $command->usingUgaritVersionOrNewer(11, __DIR__.'/fixtures/ugarit10');
+        $onUgarit11 = $command->usingUgaritVersionOrNewer(11, __DIR__.'/fixtures/ugarit11');
+        $onUgarit12 = $command->usingUgaritVersionOrNewer(11, __DIR__.'/fixtures/ugarit12');
+
+        $this->assertFalse($onUgarit10);
+        $this->assertTrue($onUgarit11);
+        $this->assertTrue($onUgarit12);
+    }
+
+    public function test_it_handles_absolute_paths_correctly()
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('This test is for Unix/Linux systems only.');
+        }
+
+        $command = new class extends NewCommand
+        {
+            public function getInstallationDirectoryPublic(string $name)
+            {
+                return $this->getInstallationDirectory($name);
+            }
+        };
+
+        $absolutePath = '/tmp/my-app';
+        $this->assertSame($absolutePath, $command->getInstallationDirectoryPublic($absolutePath));
+
+        $relativePath = 'my-app';
+        $this->assertSame(getcwd().'/'.$relativePath, $command->getInstallationDirectoryPublic($relativePath));
+
+        $this->assertSame('.', $command->getInstallationDirectoryPublic('.'));
+    }
+
+    public function test_it_can_read_ugarit_installer_hooks()
+    {
+        $directory = __DIR__.'/../tests-output/installer-hooks';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        file_put_contents($directory.'/composer.json', json_encode([
+            'extra' => [
+                'ugarit' => [
+                    'installer' => [
+                        'post-create-project' => [
+                            '@php scribe install:features --ansi',
+                            '',
+                            ['not-a-command'],
+                            'php scribe custom:setup',
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+        $command = new class extends NewCommand
+        {
+            public function installerHooksPublic(string $directory, string $hook): array
+            {
+                return $this->installerHooks($directory, $hook);
+            }
+        };
+
+        $commands = $command->installerHooksPublic($directory, 'post-create-project');
+
+        $this->assertCount(2, $commands);
+        $this->assertStringEndsWith(' scribe install:features --ansi', $commands[0]);
+        $this->assertSame('php scribe custom:setup', $commands[1]);
+    }
+
+    public function test_missing_ugarit_installer_hooks_return_an_empty_array()
+    {
+        $directory = __DIR__.'/../tests-output/missing-installer-hooks';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        file_put_contents($directory.'/composer.json', json_encode(['extra' => []]));
+
+        $command = new class extends NewCommand
+        {
+            public function installerHooksPublic(string $directory, string $hook): array
+            {
+                return $this->installerHooks($directory, $hook);
+            }
+        };
+
+        $this->assertSame([], $command->installerHooksPublic($directory, 'post-create-project'));
+    }
+
+    public function test_failing_ugarit_installer_hooks_return_a_failed_process()
+    {
+        $directory = __DIR__.'/../tests-output/failing-installer-hooks';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        file_put_contents($directory.'/composer.json', json_encode([
+            'extra' => [
+                'ugarit' => [
+                    'installer' => [
+                        'post-create-project' => [
+                            '@php -r "exit(7);"',
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+        $command = new class extends NewCommand
+        {
+            public function runInstallerHooksPublic(string $directory)
+            {
+                $this->agent = new Agent;
+
+                $input = new ArrayInput(['command' => 'new'], (new Application)->getDefinition());
+                $input->setInteractive(false);
+
+                return $this->runInstallerHooks($directory, $input, new BufferedOutput);
+            }
+        };
+
+        $process = $command->runInstallerHooksPublic($directory);
+
+        $this->assertFalse($process->isSuccessful());
+        $this->assertNotSame(0, $process->getExitCode());
+    }
+
+    public function test_no_node_option_is_passed_to_ugarit_installer_hooks()
+    {
+        $directory = __DIR__.'/../tests-output/no-node-installer-hooks';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        file_put_contents($directory.'/composer.json', json_encode([
+            'extra' => [
+                'ugarit' => [
+                    'installer' => [
+                        'post-create-project' => [
+                            '@php -r "echo getenv(\'UGARIT_INSTALLER_NO_NODE\');"',
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+        $command = new class extends NewCommand
+        {
+            public function runInstallerHooksPublic(string $directory, bool $noNode)
+            {
+                $this->agent = new Agent;
+
+                $definition = (new Application)->getDefinition();
+                $definition->addOption(new InputOption('no-node', null, InputOption::VALUE_NONE));
+
+                $input = new ArrayInput(
+                    $noNode ? ['command' => 'new', '--no-node' => true] : ['command' => 'new'],
+                    $definition,
+                );
+                $input->setInteractive(false);
+
+                return $this->runInstallerHooks(
+                    $directory,
+                    $input,
+                    new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, true),
+                );
+            }
+        };
+
+        $this->assertSame('1', $command->runInstallerHooksPublic($directory, true)->getOutput());
+        $this->assertSame('', $command->runInstallerHooksPublic($directory, false)->getOutput());
+    }
+
+    public function test_it_configures_composer_scripts_for_the_selected_package_manager()
+    {
+        $directory = __DIR__.'/../tests-output/composer-scripts';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        file_put_contents($directory.'/composer.json', json_encode([
+            'scripts' => [
+                'dev' => ['npm run dev'],
+                'setup' => ['npm install', 'npm run build'],
+                'ci:check' => ['npm run lint:check', '@test'],
+                'lint' => ['@php vendor/bin/pint'],
+            ],
+        ]));
+
+        $command = new class extends NewCommand
+        {
+            public function configureComposerScriptsPublic(string $directory, NodePackageManager $packageManager): void
+            {
+                $this->composer = new Composer(new Filesystem, $directory);
+
+                $this->configureComposerScripts($packageManager);
+            }
+        };
+
+        $command->configureComposerScriptsPublic($directory, NodePackageManager::BUN);
+
+        $scripts = json_decode(file_get_contents($directory.'/composer.json'), true)['scripts'];
+
+        $this->assertSame(['bun run dev'], $scripts['dev']);
+        $this->assertSame(['bun install', 'bun run build'], $scripts['setup']);
+        $this->assertSame(['bun run lint:check', '@test'], $scripts['ci:check']);
+    }
+
+    public function test_it_updates_the_workflow_php_version_to_the_local_php_version()
+    {
+        $directory = __DIR__.'/../tests-output/workflow-php-version';
+
+        if (! is_dir($directory.'/.github/workflows')) {
+            mkdir($directory.'/.github/workflows', 0777, true);
+        }
+
+        file_put_contents(
+            $directory.'/.github/workflows/tests.yml',
+            "      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: '8.3'\n          tools: composer:v2\n",
+        );
+
+        $command = new class extends NewCommand
+        {
+            public function configureWorkflowPhpVersionPublic(string $directory): void
+            {
+                $this->configureWorkflowPhpVersion($directory);
+            }
+        };
+
+        $command->configureWorkflowPhpVersionPublic($directory);
+
+        $this->assertStringContainsString(
+            sprintf("php-version: '%d.%d'", PHP_MAJOR_VERSION, PHP_MINOR_VERSION),
+            file_get_contents($directory.'/.github/workflows/tests.yml'),
+        );
+    }
+
+    public function test_it_ignores_applications_without_a_tests_workflow()
+    {
+        $directory = __DIR__.'/../tests-output/workflow-php-version-missing';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        $command = new class extends NewCommand
+        {
+            public function configureWorkflowPhpVersionPublic(string $directory): void
+            {
+                $this->configureWorkflowPhpVersion($directory);
+            }
+        };
+
+        $command->configureWorkflowPhpVersionPublic($directory);
+
+        $this->assertFileDoesNotExist($directory.'/.github/workflows/tests.yml');
+    }
+
+    public function test_it_does_not_prompt_to_update_again_once_an_update_was_already_attempted()
+    {
+        $command = new class extends NewCommand
+        {
+            public function checkForUpdatePublic(InputInterface $input, OutputInterface $output): void
+            {
+                $this->agent = new class extends Agent
+                {
+                    public function isActive(): bool
+                    {
+                        return false;
+                    }
+                };
+
+                $this->checkForUpdate($input, $output);
+            }
+
+            protected function getLatestVersionData(string $package): string|false
+            {
+                return json_encode(['packages' => ['ugarit/installer' => [['version' => '99.0.0']]]]);
+            }
+        };
+
+        $app = new Application('Ugarit Installer', '1.0.0');
+
+        if (method_exists($app, 'addCommand')) {
+            $app->addCommand($command);
+        } else {
+            $app->add($command);
+        }
+
+        $input = new ArrayInput([]);
+        $input->setInteractive(false);
+        $output = new BufferedOutput();
+
+        putenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED=1');
+
+        try {
+            $command->checkForUpdatePublic($input, $output);
+        } finally {
+            putenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED');
+        }
+
+        $this->assertStringContainsString('could not be updated', $output->fetch());
+    }
+
+    public function test_it_still_prompts_to_update_when_no_update_was_previously_attempted()
+    {
+        $command = new class extends NewCommand
+        {
+            public function checkForUpdatePublic(InputInterface $input, OutputInterface $output): void
+            {
+                $this->agent = new class extends Agent
+                {
+                    public function isActive(): bool
+                    {
+                        return false;
+                    }
+                };
+
+                $this->checkForUpdate($input, $output);
+            }
+
+            protected function getLatestVersionData(string $package): string|false
+            {
+                return json_encode(['packages' => ['ugarit/installer' => [['version' => '99.0.0']]]]);
+            }
+        };
+
+        $app = new Application('Ugarit Installer', '1.0.0');
+
+        if (method_exists($app, 'addCommand')) {
+            $app->addCommand($command);
+        } else {
+            $app->add($command);
+        }
+
+        $input = new ArrayInput(['command' => 'new'], (new Application)->getDefinition());
+        $input->setInteractive(false);
+        $output = new BufferedOutput();
+
+        putenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED');
+
+        // Force the "Would you like to update now?" confirmation to decline,
+        // so the test does not fall through to a real `composer` invocation.
+        Prompt::fallbackWhen(true);
+        ConfirmPrompt::fallbackUsing(fn (ConfirmPrompt $prompt) => false);
+
+        $command->checkForUpdatePublic($input, $output);
+
+        $rendered = $output->fetch();
+
+        $this->assertStringContainsString('A new version of the Ugarit installer is available', $rendered);
+        $this->assertStringNotContainsString('could not be updated', $rendered);
+    }
+
+    public function test_update_attempted_marker_is_consumed_and_not_leaked_to_grandchild_processes()
+    {
+        $command = new class extends NewCommand
+        {
+            public function checkForUpdatePublic(InputInterface $input, OutputInterface $output): void
+            {
+                $this->agent = new class extends Agent
+                {
+                    public function isActive(): bool
+                    {
+                        return false;
+                    }
+                };
+
+                $this->checkForUpdate($input, $output);
+            }
+
+            protected function getLatestVersionData(string $package): string|false
+            {
+                return json_encode(['packages' => ['ugarit/installer' => [['version' => '99.0.0']]]]);
+            }
+        };
+
+        $app = new Application('Ugarit Installer', '1.0.0');
+
+        if (method_exists($app, 'addCommand')) {
+            $app->addCommand($command);
+        } else {
+            $app->add($command);
+        }
+
+        $input = new ArrayInput([]);
+        $input->setInteractive(false);
+        $output = new BufferedOutput();
+
+        putenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED=1');
+
+        try {
+            $command->checkForUpdatePublic($input, $output);
+        } finally {
+            $this->assertFalse(getenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED'));
+
+            putenv('UGARIT_INSTALLER_UPDATE_ATTEMPTED');
+        }
+    }
+
+    public function test_proxy_ugarit_new_passes_the_update_attempted_marker_to_the_child_process()
+    {
+        $directory = __DIR__.'/../tests-output/proxy-ugarit-new-marker';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        $command = new class extends NewCommand
+        {
+            public function runWithEnvPublic(InputInterface $input, OutputInterface $output, string $workingPath, array $env): Process
+            {
+                $this->agent = new class extends Agent
+                {
+                    public function isActive(): bool
+                    {
+                        return false;
+                    }
+                };
+
+                return $this->runCommands(
+                    [$this->phpBinary().' -r "echo getenv(\'UGARIT_INSTALLER_UPDATE_ATTEMPTED\');"'],
+                    $input,
+                    $output,
+                    workingPath: $workingPath,
+                    env: $env,
+                );
+            }
+        };
+
+        $input = new ArrayInput(['command' => 'new'], (new Application)->getDefinition());
+        $input->setInteractive(false);
+
+        $withMarker = $command->runWithEnvPublic(
+            $input,
+            new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, true),
+            $directory,
+            ['UGARIT_INSTALLER_UPDATE_ATTEMPTED' => '1'],
+        );
+
+        $this->assertSame('1', $withMarker->getOutput());
+
+        $withoutMarker = $command->runWithEnvPublic(
+            $input,
+            new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, true),
+            $directory,
+            [],
+        );
+
+        $this->assertSame('', $withoutMarker->getOutput());
+    }
+
+    public function test_it_fixes_the_test_code_style_when_pint_is_available()
+    {
+        $directory = __DIR__.'/../tests-output/pest-code-style';
+
+        if (! is_dir($directory.'/vendor/bin')) {
+            mkdir($directory.'/vendor/bin', 0777, true);
+        }
+
+        file_put_contents(
+            $directory.'/vendor/bin/pint',
+            '<?php file_put_contents(__DIR__.\'/pint-args.txt\', implode(\' \', array_slice($argv, 1)));',
+        );
+
+        @unlink($directory.'/vendor/bin/pint-args.txt');
+
+        $command = new class extends NewCommand
+        {
+            public function fixTestCodeStylePublic(string $directory)
+            {
+                $this->agent = new Agent;
+
+                $input = new ArrayInput(['command' => 'new'], (new Application)->getDefinition());
+                $input->setInteractive(false);
+
+                return $this->fixTestCodeStyle($directory, $input, new BufferedOutput);
+            }
+        };
+
+        $process = $command->fixTestCodeStylePublic($directory);
+
+        $this->assertTrue($process->isSuccessful());
+        $this->assertFileExists($directory.'/vendor/bin/pint-args.txt');
+        $this->assertStringContainsString('tests', file_get_contents($directory.'/vendor/bin/pint-args.txt'));
+    }
+
+    public function test_it_skips_the_test_code_style_fix_when_pint_is_missing()
+    {
+        $directory = __DIR__.'/../tests-output/pest-code-style-missing-pint';
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        $command = new class extends NewCommand
+        {
+            public function fixTestCodeStylePublic(string $directory)
+            {
+                $this->agent = new Agent;
+
+                $input = new ArrayInput(['command' => 'new'], (new Application)->getDefinition());
+                $input->setInteractive(false);
+
+                return $this->fixTestCodeStyle($directory, $input, new BufferedOutput);
+            }
+        };
+
+        $this->assertNull($command->fixTestCodeStylePublic($directory));
+    }
+
+    public function test_read_log_tail_strips_ansi_and_returns_last_lines()
+    {
+        $path = tempnam(sys_get_temp_dir(), 'installer-tail-test-');
+        file_put_contents(
+            $path,
+            "line one\n\e[31mline two\e[0m\nline three\nline four\n"
+        );
+
+        $tail = (new Agent)->readLogTail($path, 2);
+
+        @unlink($path);
+
+        $this->assertSame("line three\nline four", $tail);
+    }
+
+    public function test_read_log_tail_returns_empty_string_for_missing_file()
+    {
+        $this->assertSame('', (new Agent)->readLogTail('/nonexistent/path/'.uniqid()));
+    }
+
+    public function test_agent_mode_emits_single_json_line_with_failure_details()
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Subprocess test is for Unix/Linux systems only.');
+        }
+
+        $bin = realpath(__DIR__.'/../bin/ugarit');
+        $name = 'tests-output/agent-fail-'.bin2hex(random_bytes(4));
+        $dir = __DIR__.'/../'.$name;
+
+        $cmd = sprintf(
+            '%s new %s --no-boost --database=sqlite --using=does-not-exist/totally-bogus-package',
+            escapeshellarg($bin),
+            escapeshellarg($name)
+        );
+
+        $env = ['CLAUDECODE' => '1', 'PATH' => getenv('PATH'), 'HOME' => getenv('HOME')];
+
+        $process = proc_open(
+            $cmd,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            __DIR__.'/..',
+            $env
+        );
+
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+
+        if (file_exists($dir)) {
+            exec('rm -rf '.escapeshellarg($dir));
+        }
+
+        $lines = preg_split('/\r?\n/', trim($stdout));
+        $this->assertCount(1, $lines, "Expected one JSON line on stdout, got:\n{$stdout}\n---stderr---\n{$stderr}");
+
+        $payload = json_decode($lines[0], true);
+        $this->assertIsArray($payload, "Stdout was not valid JSON: {$lines[0]}");
+        $this->assertFalse($payload['success']);
+        $this->assertSame(basename($name), $payload['name']);
+        $this->assertArrayHasKey('log', $payload);
+        $this->assertArrayHasKey('tail', $payload);
+        $this->assertStringContainsString('totally-bogus-package', $payload['tail']);
+        $this->assertNotSame(0, $exit);
+
+        if (isset($payload['log']) && file_exists($payload['log'])) {
+            @unlink($payload['log']);
+        }
+    }
+
+    private function createApplication(): Application
+    {
+        $app = new Application('Ugarit Installer');
+
+        if (method_exists($app, 'addCommand')) {
+            $app->addCommand(new NewCommand);
+        } else {
+            $app->add(new NewCommand);
+        }
+
+        return $app;
+    }
+}
