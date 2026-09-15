@@ -9,7 +9,7 @@ if (file_exists(__DIR__.'/../vendor/autoload.php')) {
 
 
 
-$app = new Symfony\Component\Console\Application('Ugarit Installer', '5.32.0');
+$app = new Symfony\Component\Console\Application('Ugarit Installer', '1.00.00');
 
 if (method_exists($app, 'addCommand')) {
     $app->addCommand(new Ugarit\Installer\Console\NewCommand);

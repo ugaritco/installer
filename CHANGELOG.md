@@ -1,8 +1,9 @@
 # Release Notes
 
-## [Unreleased](https://github.com/ugarit/installer/compare/v5.32.0...master)
+## [v1.00.00](https://github.com/ugaritco/installer/releases/tag/v1.00.00) - 2026-09-16
 
-## [v5.32.0](https://github.com/ugarit/installer/compare/v5.31.1...v5.32.0) - 2026-08-25
+* Pure Ugarit rebranding: Ugarit Framework v1.00.00 support, `scribe` commands, Sunset theme, and zero legacy dependencies.
+
 
 * [5.x] Ensure Windows gets to use the php scribe dev command by [@jackbayliss](https://github.com/jackbayliss) in https://github.com/ugarit/installer/pull/558
 * Prevent installer self-update loop (#510) by [@wakqasahmed](https://github.com/wakqasahmed) in https://github.com/ugarit/installer/pull/559

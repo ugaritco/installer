@@ -359,8 +359,7 @@ class NewCommand extends Command
             'Cyberpunk' => [201, 165, 129, 93, 57, 21],
         ];
 
-        $themeName = array_rand($gradients);
-        $gradient = $gradients[$themeName];
+        $gradient = $gradients['Sunset'];
 
         foreach ($lines as $index => $line) {
             $color = $gradient[$index];
