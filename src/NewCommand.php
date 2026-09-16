@@ -1090,7 +1090,7 @@ class NewCommand extends Command
         $commands = [
             'Pest installed' => [
                 $composerBinary.' remove phpunit/phpunit --dev --no-update',
-                $composerBinary.' require pestphp/pest pestphp/pest-plugin-ugarit --no-update --dev',
+                $composerBinary.' require pestphp/pest pestphp/pest-plugin-laravel --no-update --dev',
                 $composerBinary.' update',
             ],
             'Pest initialized' => [
@@ -1117,15 +1117,17 @@ class NewCommand extends Command
                 $directory.'/.github/workflows/tests.yml',
             );
 
-            $contents = file_get_contents("$directory/tests/Pest.php");
+            if (file_exists("$directory/tests/Pest.php")) {
+                $contents = file_get_contents("$directory/tests/Pest.php");
 
-            $contents = str_replace(
-                ' // ->use(RefreshDatabase::class)',
-                '    ->use(RefreshDatabase::class)',
-                $contents,
-            );
+                $contents = str_replace(
+                    ' // ->use(RefreshDatabase::class)',
+                    '    ->use(RefreshDatabase::class)',
+                    $contents,
+                );
 
-            file_put_contents("$directory/tests/Pest.php", $contents);
+                file_put_contents("$directory/tests/Pest.php", $contents);
+            }
 
             $directoryIterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$directory/tests"));
 
@@ -1157,13 +1159,17 @@ class NewCommand extends Command
             return null;
         }
 
-        return $this->runCommands(
-            ['Test code style fixed' => $this->phpBinary().' ./vendor/bin/pint tests'],
-            $input,
-            $output,
-            workingPath: $directory,
-            taskLabel: 'Fixing test code style',
-        );
+        try {
+            return $this->runCommands(
+                ['Test code style fixed' => $this->phpBinary().' ./vendor/bin/pint tests'],
+                $input,
+                $output,
+                workingPath: $directory,
+                taskLabel: 'Fixing test code style',
+            );
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
