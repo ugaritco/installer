@@ -1090,7 +1090,7 @@ class NewCommand extends Command
         $commands = [
             'Pest installed' => [
                 $composerBinary.' remove phpunit/phpunit --dev --no-update',
-                $composerBinary.' require pestphp/pest:^4.0 --no-update --dev',
+                $composerBinary.' require "pestphp/pest:^4.7" "ugaritco/pest-plugin-ugarit:^1.00.00" --no-update --dev',
                 $composerBinary.' update -W',
             ],
             'Pest initialized' => [
