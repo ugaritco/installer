@@ -28,6 +28,7 @@ use function Heritage\Filesystem\join_paths;
 use function Ugarit\Prompts\callout;
 use function Ugarit\Prompts\confirm;
 use function Ugarit\Prompts\form;
+use function Ugarit\Prompts\multiselect;
 use function Ugarit\Prompts\select;
 use function Ugarit\Prompts\task;
 
@@ -118,6 +119,7 @@ class NewCommand extends Command
             ->addOption('no-node', null, InputOption::VALUE_NONE, 'Skip installing and building NPM dependencies')
             ->addOption('boost', null, InputOption::VALUE_NONE, 'Install Ugarit Boost to improve AI assisted coding')
             ->addOption('no-boost', null, InputOption::VALUE_NONE, 'Skip Ugarit Boost installation')
+            ->addOption('agent', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_OPTIONAL, 'The AI agent(s) to configure for Boost', [])
             ->addOption('using', null, InputOption::VALUE_OPTIONAL, 'Install a custom starter kit from a community maintained package')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Forces install even if the directory already exists');
     }
@@ -329,6 +331,25 @@ class NewCommand extends Command
             $input->setOption('boost', confirm(
                 label: 'Do you want to install Ugarit Boost to improve AI assisted coding?',
             ));
+        }
+
+        if ($input->getOption('boost') && empty($input->getOption('agent'))) {
+            $agents = multiselect(
+                label: 'Which AI agents would you like to configure for Boost?',
+                options: [
+                    'cursor' => 'Cursor',
+                    'antigravity' => 'Antigravity',
+                    'claude-code' => 'Claude Code',
+                    'copilot' => 'GitHub Copilot',
+                    'opencode' => 'OpenCode',
+                    'zed' => 'Zed',
+                    'junie' => 'Junie',
+                    'kiro' => 'Kiro',
+                ],
+                default: ['cursor', 'antigravity', 'claude-code', 'copilot'],
+                hint: 'Select AI agents to configure instructions, guidelines, and skills for',
+            );
+            $input->setOption('agent', $agents);
         }
     }
 
@@ -1230,9 +1251,15 @@ PEST;
     {
         $composerBinary = $this->findComposer();
 
+        $agentArgs = '';
+        $selectedAgents = (array) $input->getOption('agent');
+        if (! empty($selectedAgents)) {
+            $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
+        }
+
         $commands = [
-            'Boost installed' => $composerBinary.' require "ugarit/boost:^2.5" --dev -W',
-            'Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction',
+            'Boost installed' => $composerBinary.' require "ugarit/boost:^1.00.00|^2.5" --dev -W',
+            'Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs,
         ];
 
         $this->runCommands(
