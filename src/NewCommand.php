@@ -1217,7 +1217,7 @@ class NewCommand extends Command
         $composerBinary = $this->findComposer();
 
         $commands = [
-            'Boost installed' => $composerBinary.' require "ugarit/boost:^1.00.00" --dev -W',
+            'Boost installed' => $composerBinary.' require "ugarit/boost:^2.5" --dev -W',
             'Boost initialized' => trim(sprintf(
                 $this->phpBinary().' scribe boost:install %s',
                 ! $input->isInteractive() ? '--no-interaction' : '',
