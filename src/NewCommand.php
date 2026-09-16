@@ -319,8 +319,8 @@ class NewCommand extends Command
         if (! $input->getOption('phpunit') && ! $input->getOption('pest')) {
             $input->setOption('pest', select(
                 label: 'Which testing framework do you prefer?',
-                options: ['PHPUnit', 'Pest'],
-                default: 'PHPUnit',
+                options: ['Pest', 'PHPUnit'],
+                default: 'Pest',
             ) === 'Pest');
         }
 
@@ -1090,14 +1090,11 @@ class NewCommand extends Command
         $commands = [
             'Pest installed' => [
                 $composerBinary.' remove phpunit/phpunit --dev --no-update',
-                $composerBinary.' require pestphp/pest pestphp/pest-plugin-laravel --no-update --dev',
-                $composerBinary.' update',
+                $composerBinary.' require pestphp/pest:^4.0 --no-update --dev',
+                $composerBinary.' update -W',
             ],
             'Pest initialized' => [
                 $this->phpBinary().' ./vendor/bin/pest --init',
-                $composerBinary.' require pestphp/pest-plugin-drift --dev',
-                $this->phpBinary().' ./vendor/bin/pest --drift',
-                $composerBinary.' remove pestphp/pest-plugin-drift --dev',
             ],
         ];
 
@@ -1110,39 +1107,50 @@ class NewCommand extends Command
             taskLabel: 'Setting up Pest',
         );
 
+        $pestFile = "$directory/tests/Pest.php";
+        $pestContent = <<<'PEST'
+<?php
+
+/*
+|--------------------------------------------------------------------------
+| Test Case
+|--------------------------------------------------------------------------
+|
+| The closure you provide to your test functions is always bound to a specific PHPUnit test
+| case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
+| need to change it using the "uses()" function to bind different classes or traits.
+|
+*/
+
+uses(
+    Tests\TestCase::class,
+    Heritage\Foundation\Testing\RefreshDatabase::class,
+)->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Expectations
+|--------------------------------------------------------------------------
+|
+| When you're writing tests, you often need to check that values meet certain conditions. The
+| "expect()" function gives you access to a set of "expectations" methods that you can use
+| to assert different things. Of course, you may extend the Expectation API at any time.
+|
+*/
+
+expect()->extend('toBeOne', function () {
+    return $this->toBe(1);
+});
+PEST;
+
+        file_put_contents($pestFile, $pestContent);
+
         if ($this->usingStarterKit($input)) {
             $this->replaceInFile(
                 './vendor/bin/phpunit',
                 './vendor/bin/pest',
                 $directory.'/.github/workflows/tests.yml',
             );
-
-            if (file_exists("$directory/tests/Pest.php")) {
-                $contents = file_get_contents("$directory/tests/Pest.php");
-
-                $contents = str_replace(
-                    ' // ->use(RefreshDatabase::class)',
-                    '    ->use(RefreshDatabase::class)',
-                    $contents,
-                );
-
-                file_put_contents("$directory/tests/Pest.php", $contents);
-            }
-
-            $directoryIterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$directory/tests"));
-
-            foreach ($directoryIterator as $testFile) {
-                if ($testFile->isDir()) {
-                    continue;
-                }
-
-                $contents = file_get_contents($testFile);
-
-                file_put_contents(
-                    $testFile,
-                    str_replace("\n\nuses(\Heritage\Foundation\Testing\RefreshDatabase::class);", '', $contents),
-                );
-            }
         }
 
         $this->fixTestCodeStyle($directory, $input, $output);
