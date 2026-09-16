@@ -1232,10 +1232,7 @@ PEST;
 
         $commands = [
             'Boost installed' => $composerBinary.' require "ugarit/boost:^2.5" --dev -W',
-            'Boost initialized' => trim(sprintf(
-                $this->phpBinary().' scribe boost:install %s',
-                ! $input->isInteractive() ? '--no-interaction' : '',
-            )),
+            'Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction',
         ];
 
         $this->runCommands(
