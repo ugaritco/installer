@@ -1240,37 +1240,19 @@ PEST;
             taskLabel: 'Installing Ugarit Boost package',
         );
 
-        $isInteractive = $input->isInteractive() && ! $input->getOption('no-interaction');
-
-        if ($isInteractive) {
-            $boostCommand = $this->phpBinary().' scribe boost:install';
-            if ('\\' === DIRECTORY_SEPARATOR && ! Process::isTtySupported()) {
-                $this->runCommandsInteractivelyOnWindows($boostCommand, $directory, []);
-            } else {
-                $process = Process::fromShellCommandline($boostCommand, $directory, null, null, null);
-                if (Process::isTtySupported()) {
-                    try {
-                        $process->setTty(true);
-                    } catch (Throwable) {
-                    }
-                }
-                $process->run();
-            }
-        } else {
-            $agentArgs = '';
-            $selectedAgents = (array) $input->getOption('agent');
-            if (! empty($selectedAgents)) {
-                $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
-            }
-
-            $this->runCommands(
-                ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs],
-                $input,
-                $output,
-                workingPath: $directory,
-                taskLabel: 'Configuring Ugarit Boost for AI assisted coding',
-            );
+        $agentArgs = '';
+        $selectedAgents = (array) $input->getOption('agent');
+        if (! empty($selectedAgents)) {
+            $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
         }
+
+        $this->runCommands(
+            ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs],
+            $input,
+            $output,
+            workingPath: $directory,
+            taskLabel: 'Configuring Ugarit Boost for AI assisted coding',
+        );
 
         $this->commitChanges('Install Ugarit Boost', $directory, $input, $output);
     }
