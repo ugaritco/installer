@@ -335,58 +335,6 @@ class NewCommand extends Command
                 label: 'Do you want to install Ugarit Boost to improve AI assisted coding?',
             ));
         }
-
-        if ($input->getOption('boost')) {
-            if (! $input->getOption('guidelines') && ! $input->getOption('skills') && ! $input->getOption('mcp')) {
-                $features = multiselect(
-                    label: 'Which Boost features would you like to configure?',
-                    options: [
-                        'guidelines' => 'AI Guidelines',
-                        'skills' => 'Agent Skills',
-                        'mcp' => 'Boost MCP Server Configuration',
-                    ],
-                    default: ['guidelines', 'skills', 'mcp'],
-                    required: true,
-                    hint: 'Select the Boost features you want to install',
-                );
-
-                if (in_array('guidelines', $features)) {
-                    $input->setOption('guidelines', true);
-                }
-                if (in_array('skills', $features)) {
-                    $input->setOption('skills', true);
-                }
-                if (in_array('mcp', $features)) {
-                    $input->setOption('mcp', true);
-                }
-            }
-
-            if (empty($input->getOption('agent'))) {
-                $agents = multiselect(
-                    label: 'Which AI agents would you like to configure for Boost?',
-                    options: [
-                        'antigravity' => 'Antigravity',
-                        'cursor' => 'Cursor',
-                        'claude-code' => 'Claude Code',
-                        'copilot' => 'GitHub Copilot',
-                        'opencode' => 'OpenCode',
-                        'zed' => 'Zed',
-                        'junie' => 'Junie',
-                        'kiro' => 'Kiro',
-                        'codex' => 'Codex',
-                        'factory-droid' => 'Factory Droid',
-                        'grok-build' => 'Grok Build',
-                        'pi' => 'Pi',
-                        'amp' => 'Amp',
-                    ],
-                    default: ['antigravity', 'cursor', 'claude-code', 'copilot'],
-                    required: true,
-                    scroll: 13,
-                    hint: 'Select AI agents to configure instructions, guidelines, and skills for',
-                );
-                $input->setOption('agent', $agents);
-            }
-        }
     }
 
     /**
@@ -1295,31 +1243,79 @@ PEST;
             taskLabel: 'Installing Ugarit Boost package',
         );
 
-        $boostArgs = [];
-        if ($input->getOption('guidelines')) {
-            $boostArgs[] = '--guidelines';
-        }
-        if ($input->getOption('skills')) {
-            $boostArgs[] = '--skills';
-        }
-        if ($input->getOption('mcp')) {
-            $boostArgs[] = '--mcp';
-        }
+        $isInteractive = $input->isInteractive() && ! $input->getOption('no-interaction');
 
-        $selectedAgents = (array) $input->getOption('agent');
-        foreach ($selectedAgents as $agent) {
-            $boostArgs[] = '--agent="'.$agent.'"';
+        if ($isInteractive) {
+            $boostArgs = [];
+            if ($input->getOption('guidelines')) {
+                $boostArgs[] = '--guidelines';
+            }
+            if ($input->getOption('skills')) {
+                $boostArgs[] = '--skills';
+            }
+            if ($input->getOption('mcp')) {
+                $boostArgs[] = '--mcp';
+            }
+
+            $selectedAgents = (array) $input->getOption('agent');
+            foreach ($selectedAgents as $agent) {
+                $boostArgs[] = '--agent="'.$agent.'"';
+            }
+
+            $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
+            $boostCommand = $this->phpBinary().' scribe boost:install'.$extraArgs;
+
+            // Clear any lingering characters in the input stream so prompts wait for real user interaction...
+            if (defined('STDIN')) {
+                @stream_set_blocking(STDIN, false);
+                while (@fread(STDIN, 1024)) {}
+                @stream_set_blocking(STDIN, true);
+            }
+
+            if ('\\' === DIRECTORY_SEPARATOR) {
+                $oldCwd = getcwd();
+                chdir($directory);
+                passthru($boostCommand);
+                if ($oldCwd !== false) {
+                    chdir($oldCwd);
+                }
+            } else {
+                $process = Process::fromShellCommandline($boostCommand, $directory, null, null, null);
+                if (Process::isTtySupported()) {
+                    try {
+                        $process->setTty(true);
+                    } catch (Throwable) {
+                    }
+                }
+                $process->run();
+            }
+        } else {
+            $boostArgs = [];
+            if ($input->getOption('guidelines')) {
+                $boostArgs[] = '--guidelines';
+            }
+            if ($input->getOption('skills')) {
+                $boostArgs[] = '--skills';
+            }
+            if ($input->getOption('mcp')) {
+                $boostArgs[] = '--mcp';
+            }
+
+            $selectedAgents = (array) $input->getOption('agent');
+            foreach ($selectedAgents as $agent) {
+                $boostArgs[] = '--agent="'.$agent.'"';
+            }
+
+            $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
+
+            $this->runCommands(
+                ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$extraArgs],
+                $input,
+                $output,
+                workingPath: $directory,
+                taskLabel: 'Configuring Ugarit Boost for AI assisted coding',
+            );
         }
-
-        $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
-
-        $this->runCommands(
-            ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$extraArgs],
-            $input,
-            $output,
-            workingPath: $directory,
-            taskLabel: 'Configuring Ugarit Boost for AI assisted coding',
-        );
 
         $this->commitChanges('Install Ugarit Boost', $directory, $input, $output);
     }
