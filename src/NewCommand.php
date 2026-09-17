@@ -119,6 +119,9 @@ class NewCommand extends Command
             ->addOption('no-node', null, InputOption::VALUE_NONE, 'Skip installing and building NPM dependencies')
             ->addOption('boost', null, InputOption::VALUE_NONE, 'Install Ugarit Boost to improve AI assisted coding')
             ->addOption('no-boost', null, InputOption::VALUE_NONE, 'Skip Ugarit Boost installation')
+            ->addOption('guidelines', null, InputOption::VALUE_NONE, 'Install AI guidelines for Boost')
+            ->addOption('skills', null, InputOption::VALUE_NONE, 'Install agent skills for Boost')
+            ->addOption('mcp', null, InputOption::VALUE_NONE, 'Install MCP server configuration for Boost')
             ->addOption('agent', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_OPTIONAL, 'The AI agent(s) to configure for Boost', [])
             ->addOption('using', null, InputOption::VALUE_OPTIONAL, 'Install a custom starter kit from a community maintained package')
             ->addOption('force', 'f', InputOption::VALUE_NONE, 'Forces install even if the directory already exists');
@@ -331,6 +334,58 @@ class NewCommand extends Command
             $input->setOption('boost', confirm(
                 label: 'Do you want to install Ugarit Boost to improve AI assisted coding?',
             ));
+        }
+
+        if ($input->getOption('boost')) {
+            if (! $input->getOption('guidelines') && ! $input->getOption('skills') && ! $input->getOption('mcp')) {
+                $features = multiselect(
+                    label: 'Which Boost features would you like to configure?',
+                    options: [
+                        'guidelines' => 'AI Guidelines',
+                        'skills' => 'Agent Skills',
+                        'mcp' => 'Boost MCP Server Configuration',
+                    ],
+                    default: ['guidelines', 'skills', 'mcp'],
+                    required: true,
+                    hint: 'Select the Boost features you want to install',
+                );
+
+                if (in_array('guidelines', $features)) {
+                    $input->setOption('guidelines', true);
+                }
+                if (in_array('skills', $features)) {
+                    $input->setOption('skills', true);
+                }
+                if (in_array('mcp', $features)) {
+                    $input->setOption('mcp', true);
+                }
+            }
+
+            if (empty($input->getOption('agent'))) {
+                $agents = multiselect(
+                    label: 'Which AI agents would you like to configure for Boost?',
+                    options: [
+                        'antigravity' => 'Antigravity',
+                        'cursor' => 'Cursor',
+                        'claude-code' => 'Claude Code',
+                        'copilot' => 'GitHub Copilot',
+                        'opencode' => 'OpenCode',
+                        'zed' => 'Zed',
+                        'junie' => 'Junie',
+                        'kiro' => 'Kiro',
+                        'codex' => 'Codex',
+                        'factory-droid' => 'Factory Droid',
+                        'grok-build' => 'Grok Build',
+                        'pi' => 'Pi',
+                        'amp' => 'Amp',
+                    ],
+                    default: ['antigravity', 'cursor', 'claude-code', 'copilot'],
+                    required: true,
+                    scroll: 13,
+                    hint: 'Select AI agents to configure instructions, guidelines, and skills for',
+                );
+                $input->setOption('agent', $agents);
+            }
         }
     }
 
@@ -1240,14 +1295,26 @@ PEST;
             taskLabel: 'Installing Ugarit Boost package',
         );
 
-        $agentArgs = '';
-        $selectedAgents = (array) $input->getOption('agent');
-        if (! empty($selectedAgents)) {
-            $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
+        $boostArgs = [];
+        if ($input->getOption('guidelines')) {
+            $boostArgs[] = '--guidelines';
+        }
+        if ($input->getOption('skills')) {
+            $boostArgs[] = '--skills';
+        }
+        if ($input->getOption('mcp')) {
+            $boostArgs[] = '--mcp';
         }
 
+        $selectedAgents = (array) $input->getOption('agent');
+        foreach ($selectedAgents as $agent) {
+            $boostArgs[] = '--agent="'.$agent.'"';
+        }
+
+        $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
+
         $this->runCommands(
-            ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs],
+            ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$extraArgs],
             $input,
             $output,
             workingPath: $directory,
