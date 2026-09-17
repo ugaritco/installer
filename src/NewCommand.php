@@ -332,25 +332,6 @@ class NewCommand extends Command
                 label: 'Do you want to install Ugarit Boost to improve AI assisted coding?',
             ));
         }
-
-        if ($input->getOption('boost') && empty($input->getOption('agent'))) {
-            $agents = multiselect(
-                label: 'Which AI agents would you like to configure for Boost?',
-                options: [
-                    'cursor' => 'Cursor',
-                    'antigravity' => 'Antigravity',
-                    'claude-code' => 'Claude Code',
-                    'copilot' => 'GitHub Copilot',
-                    'opencode' => 'OpenCode',
-                    'zed' => 'Zed',
-                    'junie' => 'Junie',
-                    'kiro' => 'Kiro',
-                ],
-                default: ['cursor', 'antigravity', 'claude-code', 'copilot'],
-                hint: 'Select AI agents to configure instructions, guidelines, and skills for',
-            );
-            $input->setOption('agent', $agents);
-        }
     }
 
     /**
@@ -1251,24 +1232,45 @@ PEST;
     {
         $composerBinary = $this->findComposer();
 
-        $agentArgs = '';
-        $selectedAgents = (array) $input->getOption('agent');
-        if (! empty($selectedAgents)) {
-            $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
-        }
-
-        $commands = [
-            'Boost installed' => $composerBinary.' require "ugarit/boost:^1.00.00|^2.5" --dev -W',
-            'Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs,
-        ];
-
         $this->runCommands(
-            $commands,
+            ['Boost installed' => $composerBinary.' require "ugarit/boost:^1.00.00|^2.5" --dev -W'],
             $input,
             $output,
             workingPath: $directory,
-            taskLabel: 'Setting up Ugarit Boost for AI assisted coding',
+            taskLabel: 'Installing Ugarit Boost package',
         );
+
+        $isInteractive = $input->isInteractive() && ! $input->getOption('no-interaction');
+
+        if ($isInteractive) {
+            $boostCommand = $this->phpBinary().' scribe boost:install';
+            if ('\\' === DIRECTORY_SEPARATOR && ! Process::isTtySupported()) {
+                $this->runCommandsInteractivelyOnWindows($boostCommand, $directory, []);
+            } else {
+                $process = Process::fromShellCommandline($boostCommand, $directory, null, null, null);
+                if (Process::isTtySupported()) {
+                    try {
+                        $process->setTty(true);
+                    } catch (Throwable) {
+                    }
+                }
+                $process->run();
+            }
+        } else {
+            $agentArgs = '';
+            $selectedAgents = (array) $input->getOption('agent');
+            if (! empty($selectedAgents)) {
+                $agentArgs = ' '.implode(' ', array_map(fn ($a) => '--agent="'.$a.'"', $selectedAgents));
+            }
+
+            $this->runCommands(
+                ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$agentArgs],
+                $input,
+                $output,
+                workingPath: $directory,
+                taskLabel: 'Configuring Ugarit Boost for AI assisted coding',
+            );
+        }
 
         $this->commitChanges('Install Ugarit Boost', $directory, $input, $output);
     }
