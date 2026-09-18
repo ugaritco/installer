@@ -1263,8 +1263,8 @@ PEST;
             }
 
             $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
-            $boostCommand = $this->phpBinary().' scribe boost:install'.$extraArgs;
-
+            $ansi = $output->isDecorated() ? ' --ansi' : '';
+            $boostCommand = $this->phpBinary().' scribe boost:install'.$ansi.$extraArgs;
 
             if ('\\' === DIRECTORY_SEPARATOR) {
                 $oldCwd = getcwd();
@@ -1301,9 +1301,10 @@ PEST;
             }
 
             $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
+            $ansi = $output->isDecorated() ? ' --ansi' : '';
 
             $this->runCommands(
-                ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$extraArgs],
+                ['Boost initialized' => $this->phpBinary().' scribe boost:install --no-interaction'.$ansi.$extraArgs],
                 $input,
                 $output,
                 workingPath: $directory,
