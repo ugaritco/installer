@@ -1265,12 +1265,6 @@ PEST;
             $extraArgs = ! empty($boostArgs) ? ' '.implode(' ', $boostArgs) : '';
             $boostCommand = $this->phpBinary().' scribe boost:install'.$extraArgs;
 
-            // Clear any lingering characters in the input stream so prompts wait for real user interaction...
-            if (defined('STDIN')) {
-                @stream_set_blocking(STDIN, false);
-                while (@fread(STDIN, 1024)) {}
-                @stream_set_blocking(STDIN, true);
-            }
 
             if ('\\' === DIRECTORY_SEPARATOR) {
                 $oldCwd = getcwd();
