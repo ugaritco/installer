@@ -2,10 +2,10 @@
 
 namespace Ugarit\Installer\Console;
 
-use Heritage\Filesystem\Filesystem;
-use Heritage\Support\Composer;
-use Heritage\Support\ProcessUtils;
-use Heritage\Support\Str;
+use Ugarit\Installer\Console\Support\Composer;
+use Ugarit\Installer\Console\Support\Filesystem;
+use Ugarit\Installer\Console\Support\ProcessUtils;
+use Ugarit\Installer\Console\Support\Str;
 use Ugarit\Installer\Console\Enums\NodePackageManager;
 use Ugarit\Prompts\Elements\Element;
 use Ugarit\Prompts\Prompt;
@@ -24,7 +24,7 @@ use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
 use Throwable;
 
-use function Heritage\Filesystem\join_paths;
+use function Ugarit\Installer\Console\Support\join_paths;
 use function Ugarit\Prompts\callout;
 use function Ugarit\Prompts\confirm;
 use function Ugarit\Prompts\form;
@@ -1658,9 +1658,7 @@ PEST;
      */
     protected function phpBinary()
     {
-        $phpBinary = function_exists('Heritage\Support\php_binary')
-            ? \Heritage\Support\php_binary()
-            : (new PhpExecutableFinder)->find(false);
+        $phpBinary = (new PhpExecutableFinder)->find(false);
 
         return $phpBinary !== false
             ? ProcessUtils::escapeArgument($phpBinary)

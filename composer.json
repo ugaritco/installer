@@ -19,11 +19,10 @@
     ],
     "require": {
         "php": "^8.2",
-        "ugarit/framework": "^1.00.00",
         "ugarit/prompts": "^1.00.00",
         "ugarit/agent-detector": "^1.00.00",
         "symfony/console": "^6.2|^7.0|^8.0",
-        "symfony/polyfill-mbstring": "^1.31",
+        "symfony/polyfill-mbstring": "^1.28|^1.31",
         "symfony/process": "^6.2|^7.0|^8.0"
     },
     "require-dev": {
@@ -34,6 +33,9 @@
         "bin/ugarit"
     ],
     "autoload": {
+        "files": [
+            "src/Support/helpers.php"
+        ],
         "psr-4": {
             "Ugarit\\Installer\\Console\\": "src/"
         }

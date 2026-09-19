@@ -2,10 +2,10 @@
 
 namespace Ugarit\Installer\Console;
 
-use Heritage\Filesystem\Filesystem;
-use Heritage\Support\Composer;
-use Heritage\Support\ProcessUtils;
-use Heritage\Support\Str;
+use Ugarit\Installer\Console\Support\Composer;
+use Ugarit\Installer\Console\Support\Filesystem;
+use Ugarit\Installer\Console\Support\ProcessUtils;
+use Ugarit\Installer\Console\Support\Str;
 use Ugarit\Prompts\Prompt;
 use Ugarit\Prompts\Support\Logger;
 use Override;
@@ -234,9 +234,7 @@ class PackageCommand extends Command
      */
     protected function phpBinary()
     {
-        $phpBinary = function_exists('Heritage\Support\php_binary')
-            ? \Heritage\Support\php_binary()
-            : (new PhpExecutableFinder)->find(false);
+        $phpBinary = (new PhpExecutableFinder)->find(false);
 
         return $phpBinary !== false
             ? ProcessUtils::escapeArgument($phpBinary)

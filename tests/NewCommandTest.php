@@ -2,8 +2,8 @@
 
 namespace Ugarit\Installer\Console\Tests;
 
-use Heritage\Filesystem\Filesystem;
-use Heritage\Support\Composer;
+use Ugarit\Installer\Console\Support\Composer;
+use Ugarit\Installer\Console\Support\Filesystem;
 use Ugarit\Installer\Console\Agent;
 use Ugarit\Installer\Console\Concerns\InteractsWithHerdOrValet;
 use Ugarit\Installer\Console\Enums\NodePackageManager;
